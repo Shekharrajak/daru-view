@@ -46,6 +46,24 @@ module Daru
             #   Daru::DataFrame/Daru::Vector
             if data.is_a?(Array) && data[0].is_a?(Hash)
               f.series_data = data
+            elsif data.is_a?(Daru::DataFrame)
+              # TODO : Currently I didn't find use case for multi index.
+              return ArgumentError unless data.index.is_a?(Daru::Index)
+
+              series_type = options[:type] unless options[:type].nil?
+
+              data.vectors.each do |vector|
+                if date_based_index?(data.index)
+                  f.xAxis(type: 'datetime') unless f.options.dig(:xAxis, :type) == 'datetime'
+                  f.series(
+                    type: series_type,
+                    name: vector,
+                    data: data.index.zip(data[vector])
+                  )
+                else
+                  f.series(type: series_type, name: vector, data: data[vector])
+                end
+              end
             else
               data_new = guess_data(data)
               series_type = options[:type] unless options[:type].nil?
@@ -113,12 +131,6 @@ module Daru
 
         def guess_data(data_set)
           case
-          when data_set.is_a?(Daru::DataFrame)
-            # TODO : Currently I didn't find use case for multi index.
-            return ArgumentError unless data_set.index.is_a?(Daru::Index)
-
-            index_val = data_set.index.to_a
-            data_set.access_row_tuples_by_indexs(*index_val)
           when data_set.is_a?(Daru::Vector)
             data_set.to_a
           when data_set.is_a?(Array)
@@ -130,6 +142,10 @@ module Daru
             # TODO: error msg
             raise ArgumentError
           end
+        end
+
+        def date_based_index?(index)
+          index.is_a?(Daru::DateTimeIndex) || index.all? { |index_element| [Date, DateTime, Time].member?(index_element.class) }
         end
       end
     end
